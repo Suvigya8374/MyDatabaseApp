@@ -52,7 +52,8 @@ jobs:
           libltdl-dev \
           autoconf \
           automake \
-          pkg-config
+          pkg-config \
+          libunwind-dev
 
     - name: Install Python dependencies
       run: |

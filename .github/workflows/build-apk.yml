@@ -19,6 +19,12 @@ jobs:
       with:
         python-version: '3.9'
 
+    - name: Set up JDK 8
+      uses: actions/setup-java@v4
+      with:
+        java-version: '8'
+        distribution: 'temurin'
+
     - name: Install system dependencies
       run: |
         sudo apt update
@@ -35,7 +41,6 @@ jobs:
           xz-utils \
           tk-dev \
           liblzma-dev \
-          openjdk-8-jdk \
           unzip \
           zip \
           wget \
@@ -62,18 +67,7 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install \
-          buildozer \
-          cython==0.29.36 \
-          appdirs \
-          "colorama>=0.3.3" \
-          "jinja2" \
-          "sh>=1.10,<2.0" \
-          build \
-          toml \
-          packaging \
-          setuptools \
-          kivy==2.3.0
+        pip install buildozer cython==0.29.36 kivy==2.3.0
 
     - name: Initialize Buildozer
       run: |
@@ -85,27 +79,21 @@ jobs:
         sed -i "s|^package.name =.*|package.name = mydatabaseapp|" buildozer.spec
         sed -i "s|^version =.*|version = 0.1|" buildozer.spec
 
+    - name: Set up Android SDK
+      run: |
+        mkdir -p /home/runner/.buildozer/android/platform/android-sdk
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9474226_latest.zip -O commandlinetools.zip
+        unzip -q commandlinetools.zip -d /home/runner/.buildozer/android/platform/android-sdk
+        rm commandlinetools.zip
+        yes | /home/runner/.buildozer/android/platform/android-sdk/cmdline-tools/bin/sdkmanager --sdk_root=/home/runner/.buildozer/android/platform/android-sdk "build-tools;36.0.0" "platform-tools"
+
     - name: Build APK
       run: |
-        # Clean up Buildozer directories to avoid Git submodule issues
-        rm -rf .buildozer
-        # Run buildozer android debug with retries
-        for i in {1..5}; do
-          buildozer android debug && break || { echo "Retry $i/5"; sleep 10; }
-          # After the first failed attempt, accept licenses and install tools
-          if [ $i -eq 1 ]; then
-            echo "Accepting Android SDK licenses and installing tools..."
-            yes | /home/runner/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager --sdk_root=/home/runner/.buildozer/android/platform/android-sdk --licenses || true
-            /home/runner/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager --sdk_root=/home/runner/.buildozer/android/platform/android-sdk "build-tools;36.0.0" "platform-tools" || true
-          fi
-        done || { echo "Build failed after 5 retries"; exit 1; }
-        # Check if APK was generated
+        buildozer android debug
         if [ ! -f bin/mydatabaseapp-0.1-debug.apk ]; then
           echo "ERROR: APK not found at bin/mydatabaseapp-0.1-debug.apk"
           exit 1
         fi
-      env:
-        JAVA_HOME: /usr/lib/jvm/java-8-openjdk-amd64
 
     - name: Debug APK Location
       run: |
@@ -117,9 +105,7 @@ jobs:
         find . -name "*.apk"
 
     - name: Upload APK
-      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: mydatabaseapp-apk
         path: bin/*.apk
-      continue-on-error: true
